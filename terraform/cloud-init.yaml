@@ -34,11 +34,13 @@ write_files:
       
       # Allowed users
       c.Authenticator.allowed_users = {
-      %{ for email in student_emails ~}
-        '${email}',
+      %{ for s in students ~}
+        '${s.username}',
       %{ endfor ~}
-        '${admin_email}'
+        '${admin_username}'
       }
+      
+      c.Authenticator.admin_users = {'${admin_username}'}
       
       # PAM Authenticator
       c.JupyterHub.authenticator_class = 'jupyterhub.auth.PAMAuthenticator'
@@ -123,17 +125,17 @@ write_files:
 
 runcmd:
   # System Users for Students
-  %{for email, password in student_passwords~}
-  - useradd -m -s /bin/bash ${email}
-  - echo '${email}:${password}' | chpasswd
-  - mkdir -p /home/${email}/${notebook_directory}
-  - chown ${email}:${email} /home/${email}/${notebook_directory}
+  %{for s in students~}
+  - useradd -m -s /bin/bash ${s.username}
+  - echo '${s.username}:${s.password}' | chpasswd
+  - mkdir -p /home/${s.username}/${notebook_directory}
+  - chown -R ${s.username}:${s.username} /home/${s.username}/${notebook_directory}
   %{endfor~}
   
   # Admin User
-  - useradd -m -s /bin/bash ${admin_email}
-  - echo '${admin_email}:${admin_password}' | chpasswd
-  - usermod -aG sudo ${admin_email}
+  - useradd -m -s /bin/bash ${admin_username}
+  - echo '${admin_username}:${admin_password}' | chpasswd
+  - usermod -aG sudo ${admin_username}
   
   # Install JupyterHub and JupyterLab
   - pip3 install --upgrade pip

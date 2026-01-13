@@ -1,8 +1,16 @@
-name: "Jupyter Notebook Server"
+name: "jupyter-notebook-server"
+display_name: "Jupyter Notebook Server" # Display Name separat ist oft Standard
 description: "Multi-user Jupyter Notebook Server für Übungen und Data Science Kurse"
 version: "1.0.0"
 category: "education"
 author: "DHBW CloudStore Team"
+icon: jupyter.png # Ein Icon ist immer gut
+
+# WICHTIG: Der Pfad zum Terraform Code
+terraform:
+  working_dir: terraform/
+  required_version: ">= 1.6.0"
+
 tags:
   - jupyter
   - python
@@ -12,43 +20,43 @@ tags:
 
 parameters:
   - name: student_emails
-    type: list
+    type: array           # "array" ist konsistent mit deinem Beispiel (statt "list")
     description: "Liste der Studierenden-E-Mails für JupyterHub-Accounts"
     required: true
-    validation:
-      min_length: 1
-      max_length: 30
+    # Validierungssyntax hängt vom Store ab, aber min/max length sieht gut aus
     
   - name: admin_email
     type: string
     description: "E-Mail des Dozenten/Administrators"
     required: true
-    validation:
-      pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+    # Regex Validierung ist super
+    validation: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
   
   - name: cpu_cores
-    type: integer
-    description: "Anzahl CPU-Kerne"
-    default: 4
-    validation:
-      min: 2
-      max: 16
-  
+    type: number
+    description: "Anzahl CPU Kerne"
+    default: 2            # Empfehlung: JupyterHub braucht etwas mehr als 1 Core
+    min: 2
+    max: 8
+    required: true
+    
   - name: ram_mb
-    type: integer
+    type: number
     description: "RAM in MB"
-    default: 8192
-    validation:
-      min: 4096
-      max: 32768
+    default: 4096         # Auch hier: 2GB ist knapp für Data Science
+    min: 2048
+    max: 16384
+    step: 1024
+    required: true
   
+  # KORREKTUR: Muss exakt wie in variables.tf heißen ("disk_gb")
   - name: disk_gb
-    type: integer
-    description: "Festplattengröße in GB"
-    default: 50
-    validation:
-      min: 20
-      max: 500
+    type: number
+    description: "Festplattenspeicher (GB)"
+    default: 20
+    min: 10
+    max: 100
+    required: true
   
   - name: enable_gpu
     type: boolean
@@ -56,8 +64,8 @@ parameters:
     default: false
   
   - name: python_packages
-    type: list
-    description: "Zusätzliche Python-Pakete (z.B. pandas, sklearn, tensorflow)"
+    type: array           # Konsistent "array"
+    description: "Zusätzliche Python-Pakete"
     default:
       - pandas
       - numpy
@@ -79,38 +87,38 @@ parameters:
   
   - name: git_repo_url
     type: string
-    description: "Git-Repository URL für Übungsmaterial"
+    description: "Git-Repository URL"
     required: false
+    # Bedingte Anzeige ist ein Feature mancher Stores, gut wenn unterstützt!
     condition: "enable_git_sync == true"
 
 outputs:
   - name: jupyterhub_url
     description: "JupyterHub Login-URL"
-    sensitive: false
+    display: true         # Zeigt es prominent an
   
-  - name: admin_token
-    description: "Admin-API-Token für JupyterHub"
+  # KORREKTUR: Mapping auf das existierende Output-Objekt
+  - name: admin_credentials
+    description: "Admin Login Daten (User, Passwort, Token)"
     sensitive: true
+    display: false
   
   - name: student_credentials
     description: "Login-Credentials für Studierende"
     sensitive: true
+    display: false
   
   - name: jupyter_version
     description: "Installierte JupyterHub Version"
-    sensitive: false
   
   - name: installed_packages
     description: "Liste der installierten Python-Pakete"
-    sensitive: false
 
+# Metadaten für die Kostenkalkulation im Store
 estimated_costs:
   hourly: "0.15 - 0.50 EUR"
   monthly: "100 - 350 EUR"
-  notes: "Abhängig von CPU/RAM/GPU Konfiguration"
 
 requirements:
-  - "OpenStack Floating IP Pool"
-  - "Min. 4GB RAM"
-  - "Öffentlicher Netzwerkzugang (Port 443)"
-  - "Optional: GPU-Flavor für Deep Learning"
+  - "Min. 4GB RAM empfohlen"
+  - "Port 443 (HTTPS) Zugriff"

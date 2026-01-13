@@ -52,9 +52,8 @@ data "openstack_images_image_v2" "ubuntu" {
 
 data "openstack_compute_flavor_v2" "selected" {
   count = var.use_mock_provider ? 0 : 1
-  vcpus = var.cpu_cores
-  ram   = var.ram_mb
-  disk  = var.disk_gb
+  # NEU: Wir suchen nach dem Namen statt nach vcpus/ram/disk
+  name  = var.flavor_name
 }
 
 data "openstack_networking_network_v2" "external" {
@@ -174,10 +173,20 @@ resource "openstack_compute_instance_v2" "jupyter_server" {
   }
 
   user_data = templatefile("${path.module}/cloud-init.yaml", {
-    student_emails      = var.student_emails
-    student_passwords   = { for email in var.student_emails : email => random_password.student_passwords[email].result }
-    admin_email         = var.admin_email
-    admin_password      = random_password.admin_password.result
+    # FIX: Bereinigte Usernamen erstellen
+    students = [
+      for email in var.student_emails : {
+        email    = email
+        # Ersetzt @ und . durch _
+        username = replace(replace(lower(email), "@", "_"), ".", "_")
+        password = random_password.student_passwords[email].result
+      }
+    ]
+    # FIX: Admin Username bereinigen
+    admin_email    = var.admin_email
+    admin_username = replace(replace(lower(var.admin_email), "@", "_"), ".", "_")
+    admin_password = random_password.admin_password.result
+    
     api_token           = random_string.jupyterhub_api_token.result
     python_packages     = var.python_packages
     notebook_directory  = var.notebook_directory
@@ -185,7 +194,6 @@ resource "openstack_compute_instance_v2" "jupyter_server" {
     git_repo_url        = var.git_repo_url
     enable_gpu          = var.enable_gpu
   })
-
   metadata = {
     deployment_id = var.deployment_id
     template      = "jupyter-notebook-server"

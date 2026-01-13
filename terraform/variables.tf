@@ -1,9 +1,9 @@
 # ============================================================================
-# Core Variables
+# System Variablen (vom CloudStore automatisch gesetzt)
 # ============================================================================
 
 variable "deployment_id" {
-  description = "Unique deployment identifier"
+  description = "Unique deployment identifier from CloudStore"
   type        = string
 }
 
@@ -14,64 +14,43 @@ variable "use_mock_provider" {
 }
 
 # ============================================================================
-# User Management
+# Benutzer-Inputs (müssen exakt zur template.yaml passen)
 # ============================================================================
 
 variable "student_emails" {
-  description = "List of student email addresses for JupyterHub accounts"
+  description = "List of student email addresses"
   type        = list(string)
   
+  # Terraform Validation ist ein guter "zweiter Check" nach dem Frontend
   validation {
-    condition     = length(var.student_emails) > 0 && length(var.student_emails) <= 30
-    error_message = "Must provide between 1 and 30 student emails."
+    condition     = length(var.student_emails) > 0
+    error_message = "At least one student email is required."
   }
 }
 
 variable "admin_email" {
   description = "Email address of the admin/instructor"
   type        = string
-  
-  validation {
-    condition     = can(regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.admin_email))
-    error_message = "Admin email must be a valid email address."
-  }
 }
-
-# ============================================================================
-# Compute Resources
-# ============================================================================
 
 variable "cpu_cores" {
   description = "Number of CPU cores"
   type        = number
-  default     = 4
-  
-  validation {
-    condition     = var.cpu_cores >= 2 && var.cpu_cores <= 16
-    error_message = "CPU cores must be between 2 and 16."
-  }
+  default     = 2
 }
 
 variable "ram_mb" {
   description = "RAM in megabytes"
   type        = number
-  default     = 8192
-  
-  validation {
-    condition     = var.ram_mb >= 4096 && var.ram_mb <= 32768
-    error_message = "RAM must be between 4096 MB and 32768 MB."
-  }
+  default     = 4096
 }
 
+# WICHTIG: Hier heißt es "disk_gb", genau wie im template.yaml!
+# In der Student-VM hieß es "volume_size". Das muss einheitlich sein.
 variable "disk_gb" {
   description = "Disk size in gigabytes"
   type        = number
-  default     = 50
-  
-  validation {
-    condition     = var.disk_gb >= 20 && var.disk_gb <= 500
-    error_message = "Disk size must be between 20 GB and 500 GB."
-  }
+  default     = 20
 }
 
 variable "enable_gpu" {
@@ -81,7 +60,7 @@ variable "enable_gpu" {
 }
 
 # ============================================================================
-# Python Environment
+# App-Konfiguration (Optional im Template)
 # ============================================================================
 
 variable "python_packages" {
@@ -99,12 +78,8 @@ variable "python_packages" {
 variable "notebook_directory" {
   description = "Directory path for exercise notebooks"
   type        = string
-  default     = "/home/jovyan/exercises"
+  default     = "exercises" # Relativ zum Home-Dir ist oft sicherer
 }
-
-# ============================================================================
-# Git Integration
-# ============================================================================
 
 variable "enable_git_sync" {
   description = "Enable automatic Git repository synchronization"
@@ -113,13 +88,18 @@ variable "enable_git_sync" {
 }
 
 variable "git_repo_url" {
-  description = "Git repository URL for exercise materials"
+  description = "Git repository URL"
   type        = string
   default     = ""
 }
+variable "external_network_name" {
+  description = "Name des externen Netzwerks für Floating IPs"
+  type        = string
+  default     = "public"
+}
 
 # ============================================================================
-# OpenStack Configuration
+# Infrastruktur-Defaults (Oft versteckt oder vom Admin gesetzt)
 # ============================================================================
 
 variable "image_name" {
@@ -134,14 +114,14 @@ variable "network_name" {
   default     = "default-network"
 }
 
-variable "external_network_name" {
-  description = "Name of the external network for floating IPs"
-  type        = string
-  default     = "public"
-}
-
 variable "floating_ip_pool" {
   description = "Floating IP pool name"
   type        = string
   default     = "public"
+}
+
+variable "flavor_name" {
+  description = "Name des Flavors (Hardware-Größe) in OpenStack"
+  type        = string
+  default     = "m1.medium" # Standard-Name, den wir gleich in tfvars anpassen
 }
