@@ -1,0 +1,179 @@
+#cloud-config
+
+# JupyterHub Multi-User Server Setup
+# Installiert JupyterHub mit PAM-Authentifizierung für Studierende
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - python3-pip
+  - python3-dev
+  - nodejs
+  - npm
+  - nginx
+  - certbot
+  - python3-certbot-nginx
+  - git
+  - build-essential
+  - libssl-dev
+  - libffi-dev
+  - curl
+  - vim
+  - htop
+
+write_files:
+  # JupyterHub Configuration
+  - path: /etc/jupyterhub/jupyterhub_config.py
+    content: |
+      # JupyterHub Configuration File
+      import os
+      
+      # Admin users
+      c.Authenticator.admin_users = {'${admin_email}'}
+      
+      # Allowed users
+      c.Authenticator.allowed_users = {
+      %{ for email in student_emails ~}
+        '${email}',
+      %{ endfor ~}
+        '${admin_email}'
+      }
+      
+      # PAM Authenticator
+      c.JupyterHub.authenticator_class = 'jupyterhub.auth.PAMAuthenticator'
+      
+      # Spawner Configuration
+      c.JupyterHub.spawner_class = 'jupyterhub.spawner.SimpleLocalProcessSpawner'
+      c.Spawner.default_url = '/lab'
+      c.Spawner.notebook_dir = '${notebook_directory}'
+      
+      # Network Configuration
+      c.JupyterHub.bind_url = 'http://127.0.0.1:8000'
+      c.JupyterHub.hub_bind_url = 'http://127.0.0.1:8081'
+      
+      # API Token
+      c.JupyterHub.api_tokens = {
+        '${api_token}': '${admin_email}'
+      }
+      
+      # Logging
+      c.JupyterHub.log_level = 'INFO'
+      c.Application.log_level = 'INFO'
+    permissions: '0644'
+    owner: root:root
+
+  # Nginx Reverse Proxy Configuration
+  - path: /etc/nginx/sites-available/jupyterhub
+    content: |
+      server {
+        listen 80;
+        server_name _;
+        
+        return 301 https://$$host$$request_uri;
+      }
+      
+      server {
+        listen 443 ssl http2;
+        server_name _;
+        
+        ssl_certificate /etc/ssl/certs/jupyter-selfsigned.crt;
+        ssl_certificate_key /etc/ssl/private/jupyter-selfsigned.key;
+        
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+        
+        client_max_body_size 100M;
+        
+        location / {
+          proxy_pass http://127.0.0.1:8000;
+          proxy_set_header X-Real-IP $$remote_addr;
+          proxy_set_header Host $$host;
+          proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $$scheme;
+          
+          proxy_http_version 1.1;
+          proxy_set_header Upgrade $$http_upgrade;
+          proxy_set_header Connection "upgrade";
+          proxy_read_timeout 86400;
+        }
+      }
+    permissions: '0644'
+    owner: root:root
+
+  # Systemd Service for JupyterHub
+  - path: /etc/systemd/system/jupyterhub.service
+    content: |
+      [Unit]
+      Description=JupyterHub Multi-User Server
+      After=network.target
+      
+      [Service]
+      Type=simple
+      User=root
+      ExecStart=/usr/local/bin/jupyterhub --config /etc/jupyterhub/jupyterhub_config.py
+      Restart=on-failure
+      RestartSec=10
+      StandardOutput=journal
+      StandardError=journal
+      
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+
+runcmd:
+  # System Users for Students
+  %{for email, password in student_passwords~}
+  - useradd -m -s /bin/bash ${email}
+  - echo '${email}:${password}' | chpasswd
+  - mkdir -p /home/${email}/${notebook_directory}
+  - chown ${email}:${email} /home/${email}/${notebook_directory}
+  %{endfor~}
+  
+  # Admin User
+  - useradd -m -s /bin/bash ${admin_email}
+  - echo '${admin_email}:${admin_password}' | chpasswd
+  - usermod -aG sudo ${admin_email}
+  
+  # Install JupyterHub and JupyterLab
+  - pip3 install --upgrade pip
+  - pip3 install jupyterhub jupyterlab notebook
+  - pip3 install jupyterhub-idle-culler
+  
+  # Install Python Packages
+  %{for package in python_packages~}
+  - pip3 install ${package}
+  %{endfor~}
+  
+  # GPU Support (if enabled)
+  %{if enable_gpu}
+  - pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+  - pip3 install tensorflow[and-cuda]
+  %{endif}
+  
+  # Create directories
+  - mkdir -p /etc/jupyterhub
+  - mkdir -p ${notebook_directory}
+  
+  # Generate Self-Signed SSL Certificate
+  - openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/private/jupyter-selfsigned.key -out /etc/ssl/certs/jupyter-selfsigned.crt -subj "/C=DE/ST=Baden-Wuerttemberg/L=Mannheim/O=DHBW/CN=jupyterhub"
+  
+  # Configure Nginx
+  - ln -sf /etc/nginx/sites-available/jupyterhub /etc/nginx/sites-enabled/
+  - rm -f /etc/nginx/sites-enabled/default
+  - nginx -t
+  - systemctl restart nginx
+  - systemctl enable nginx
+  
+  # Start JupyterHub
+  - systemctl daemon-reload
+  - systemctl enable jupyterhub
+  - systemctl start jupyterhub
+  
+  # Firewall Configuration
+  - ufw allow 22/tcp
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - echo "y" | ufw enable
+
+final_message: "JupyterHub Server is ready! Access at https://<server-ip>"

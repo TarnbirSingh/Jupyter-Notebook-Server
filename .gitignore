@@ -1,0 +1,10 @@
+coverage.xml
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+.deployment-*/
+clouds.yaml
+workspaces/

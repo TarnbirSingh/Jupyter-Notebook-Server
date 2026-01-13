@@ -1,0 +1,116 @@
+name: "Jupyter Notebook Server"
+description: "Multi-user Jupyter Notebook Server für Übungen und Data Science Kurse"
+version: "1.0.0"
+category: "education"
+author: "DHBW CloudStore Team"
+tags:
+  - jupyter
+  - python
+  - data-science
+  - machine-learning
+  - education
+
+parameters:
+  - name: student_emails
+    type: list
+    description: "Liste der Studierenden-E-Mails für JupyterHub-Accounts"
+    required: true
+    validation:
+      min_length: 1
+      max_length: 30
+    
+  - name: admin_email
+    type: string
+    description: "E-Mail des Dozenten/Administrators"
+    required: true
+    validation:
+      pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+  
+  - name: cpu_cores
+    type: integer
+    description: "Anzahl CPU-Kerne"
+    default: 4
+    validation:
+      min: 2
+      max: 16
+  
+  - name: ram_mb
+    type: integer
+    description: "RAM in MB"
+    default: 8192
+    validation:
+      min: 4096
+      max: 32768
+  
+  - name: disk_gb
+    type: integer
+    description: "Festplattengröße in GB"
+    default: 50
+    validation:
+      min: 20
+      max: 500
+  
+  - name: enable_gpu
+    type: boolean
+    description: "GPU-Unterstützung für Deep Learning aktivieren"
+    default: false
+  
+  - name: python_packages
+    type: list
+    description: "Zusätzliche Python-Pakete (z.B. pandas, sklearn, tensorflow)"
+    default:
+      - pandas
+      - numpy
+      - matplotlib
+      - scikit-learn
+      - seaborn
+    required: false
+  
+  - name: notebook_directory
+    type: string
+    description: "Pfad für vorinstallierte Übungs-Notebooks"
+    default: "/home/jovyan/exercises"
+    required: false
+  
+  - name: enable_git_sync
+    type: boolean
+    description: "Automatische Synchronisation mit Git-Repository"
+    default: false
+  
+  - name: git_repo_url
+    type: string
+    description: "Git-Repository URL für Übungsmaterial"
+    required: false
+    condition: "enable_git_sync == true"
+
+outputs:
+  - name: jupyterhub_url
+    description: "JupyterHub Login-URL"
+    sensitive: false
+  
+  - name: admin_token
+    description: "Admin-API-Token für JupyterHub"
+    sensitive: true
+  
+  - name: student_credentials
+    description: "Login-Credentials für Studierende"
+    sensitive: true
+  
+  - name: jupyter_version
+    description: "Installierte JupyterHub Version"
+    sensitive: false
+  
+  - name: installed_packages
+    description: "Liste der installierten Python-Pakete"
+    sensitive: false
+
+estimated_costs:
+  hourly: "0.15 - 0.50 EUR"
+  monthly: "100 - 350 EUR"
+  notes: "Abhängig von CPU/RAM/GPU Konfiguration"
+
+requirements:
+  - "OpenStack Floating IP Pool"
+  - "Min. 4GB RAM"
+  - "Öffentlicher Netzwerkzugang (Port 443)"
+  - "Optional: GPU-Flavor für Deep Learning"
