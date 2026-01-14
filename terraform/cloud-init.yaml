@@ -1,16 +1,11 @@
 #cloud-config
-
-# JupyterHub Multi-User Server Setup
-# Installiert JupyterHub mit PAM-Authentifizierung für Studierende
-
+# JupyterHub Multi-User Server Setup (Fixed Version)
 package_update: true
 package_upgrade: true
 
 packages:
   - python3-pip
   - python3-dev
-  - nodejs
-  - npm
   - nginx
   - certbot
   - python3-certbot-nginx
@@ -19,60 +14,70 @@ packages:
   - libssl-dev
   - libffi-dev
   - curl
+  - gnupg
   - vim
   - htop
 
 write_files:
-  # JupyterHub Configuration
+  # 1. JupyterHub Configuration (Mit allen Bugfixes)
   - path: /etc/jupyterhub/jupyterhub_config.py
     content: |
-      # JupyterHub Configuration File
       import os
+      import sys
       
-      # Admin users
-      c.Authenticator.admin_users = {'${admin_email}'}
-      
-      # Allowed users
+      # Admin und Allowed Users
+      c.Authenticator.admin_users = {'${admin_username}'}
       c.Authenticator.allowed_users = {
-      %{ for s in students ~}
-        '${s.username}',
-      %{ endfor ~}
-        '${admin_username}'
+          %{ for student in students ~}
+          '${student.username}',
+          %{ endfor ~}
+          '${admin_username}'
       }
       
-      c.Authenticator.admin_users = {'${admin_username}'}
-      
-      # PAM Authenticator
       c.JupyterHub.authenticator_class = 'jupyterhub.auth.PAMAuthenticator'
-      
-      # Spawner Configuration
       c.JupyterHub.spawner_class = 'jupyterhub.spawner.SimpleLocalProcessSpawner'
       c.Spawner.default_url = '/lab'
-      c.Spawner.notebook_dir = '${notebook_directory}'
       
-      # Network Configuration
+      # --- FIX 1: Absoluter Pfad ---
+      # Wir zwingen Jupyter, im Home-Verzeichnis des jeweiligen Users zu starten.
+      # {username} wird zur Laufzeit ersetzt.
+      c.Spawner.notebook_dir = '/home/{username}/${notebook_directory}'
+      
+      # --- FIX 2: Umgebungsvariablen (PATH) ---
+      # Damit der Systemdienst 'jupyterhub-singleuser' findet
+      c.Spawner.environment = {
+          "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "LANG": "C.UTF-8"
+      }
+
+      # --- FIX 3: Allow Root ---
+      # Verhindert den Absturz wegen Sicherheitswarnung beim sudo-Start
+      c.Spawner.cmd = ["jupyterhub-singleuser", "--allow-root"]
+      
+      c.Spawner.http_timeout = 120
+      c.Spawner.start_timeout = 300
+      c.Spawner.ip = '127.0.0.1'
+      
       c.JupyterHub.bind_url = 'http://127.0.0.1:8000'
       c.JupyterHub.hub_bind_url = 'http://127.0.0.1:8081'
       
       # API Token
       c.JupyterHub.api_tokens = {
-        '${api_token}': '${admin_email}'
+        '${api_token}': '${admin_username}'
       }
       
-      # Logging
       c.JupyterHub.log_level = 'INFO'
       c.Application.log_level = 'INFO'
     permissions: '0644'
     owner: root:root
 
-  # Nginx Reverse Proxy Configuration
+  # 2. Nginx Config
   - path: /etc/nginx/sites-available/jupyterhub
     content: |
       server {
         listen 80;
         server_name _;
-        
-        return 301 https://$$host$$request_uri;
+        return 301 https://$host$request_uri;
       }
       
       server {
@@ -84,18 +89,17 @@ write_files:
         
         ssl_protocols TLSv1.2 TLSv1.3;
         ssl_ciphers HIGH:!aNULL:!MD5;
-        
         client_max_body_size 100M;
         
         location / {
           proxy_pass http://127.0.0.1:8000;
-          proxy_set_header X-Real-IP $$remote_addr;
-          proxy_set_header Host $$host;
-          proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
-          proxy_set_header X-Forwarded-Proto $$scheme;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header Host $host;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
           
           proxy_http_version 1.1;
-          proxy_set_header Upgrade $$http_upgrade;
+          proxy_set_header Upgrade $http_upgrade;
           proxy_set_header Connection "upgrade";
           proxy_read_timeout 86400;
         }
@@ -103,7 +107,7 @@ write_files:
     permissions: '0644'
     owner: root:root
 
-  # Systemd Service for JupyterHub
+  # 3. Systemd Service
   - path: /etc/systemd/system/jupyterhub.service
     content: |
       [Unit]
@@ -113,69 +117,69 @@ write_files:
       [Service]
       Type=simple
       User=root
+      Environment="PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin"
       ExecStart=/usr/local/bin/jupyterhub --config /etc/jupyterhub/jupyterhub_config.py
       Restart=on-failure
       RestartSec=10
-      StandardOutput=journal
-      StandardError=journal
       
       [Install]
       WantedBy=multi-user.target
     permissions: '0644'
 
 runcmd:
-  # System Users for Students
-  %{for s in students~}
-  - useradd -m -s /bin/bash ${s.username}
-  - echo '${s.username}:${s.password}' | chpasswd
-  - mkdir -p /home/${s.username}/${notebook_directory}
-  - chown -R ${s.username}:${s.username} /home/${s.username}/${notebook_directory}
-  %{endfor~}
-  
+  # --- SCHRITT 1: NodeJS v20 installieren (Sauberer Weg) ---
+  - curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+  - apt-get install -y nodejs
+  - npm install -g configurable-http-proxy
+
+  # --- SCHRITT 2: Python Pakete ---
+  - pip3 install --upgrade pip
+  # --ignore-installed verhindert Konflikte mit vorinstallierten Paketen (wie pexpect)
+  - pip3 install --ignore-installed jupyterhub jupyterlab notebook jupyterhub-idle-culler
+%{ for package in python_packages ~}
+  - pip3 install ${package}
+%{ endfor ~}
+
+  # --- SCHRITT 3: User erstellen & Ordner ---
+  # Studenten Loop
+%{ for student in students ~}
+  - useradd -m -s /bin/bash ${student.username}
+  - echo '${student.username}:${student.password}' | chpasswd
+  # Ordner erstellen
+  - mkdir -p /home/${student.username}/${notebook_directory}
+  - chown -R ${student.username}:${student.username} /home/${student.username}/${notebook_directory}
+  - chmod 755 /home/${student.username}/${notebook_directory}
+%{ endfor ~}
+    
   # Admin User
   - useradd -m -s /bin/bash ${admin_username}
   - echo '${admin_username}:${admin_password}' | chpasswd
   - usermod -aG sudo ${admin_username}
-  
-  # Install JupyterHub and JupyterLab
-  - pip3 install --upgrade pip
-  - pip3 install jupyterhub jupyterlab notebook
-  - pip3 install jupyterhub-idle-culler
-  
-  # Install Python Packages
-  %{for package in python_packages~}
-  - pip3 install ${package}
-  %{endfor~}
-  
-  # GPU Support (if enabled)
-  %{if enable_gpu}
-  - pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-  - pip3 install tensorflow[and-cuda]
-  %{endif}
-  
-  # Create directories
+  - mkdir -p /home/${admin_username}/${notebook_directory}
+  - chown -R ${admin_username}:${admin_username} /home/${admin_username}/${notebook_directory}
+
+  # --- SCHRITT 4: System Setup ---
   - mkdir -p /etc/jupyterhub
-  - mkdir -p ${notebook_directory}
   
-  # Generate Self-Signed SSL Certificate
-  - openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/private/jupyter-selfsigned.key -out /etc/ssl/certs/jupyter-selfsigned.crt -subj "/C=DE/ST=Baden-Wuerttemberg/L=Mannheim/O=DHBW/CN=jupyterhub"
+  # SSL Zertifikat
+  - openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/private/jupyter-selfsigned.key -out /etc/ssl/certs/jupyter-selfsigned.crt -subj "/C=DE/ST=BW/L=Mannheim/O=DHBW/CN=jupyterhub"
   
-  # Configure Nginx
+  # Nginx aktivieren
   - ln -sf /etc/nginx/sites-available/jupyterhub /etc/nginx/sites-enabled/
   - rm -f /etc/nginx/sites-enabled/default
   - nginx -t
   - systemctl restart nginx
   - systemctl enable nginx
   
-  # Start JupyterHub
+  # JupyterHub starten
   - systemctl daemon-reload
   - systemctl enable jupyterhub
   - systemctl start jupyterhub
   
-  # Firewall Configuration
+  # Firewall
   - ufw allow 22/tcp
   - ufw allow 80/tcp
   - ufw allow 443/tcp
   - echo "y" | ufw enable
 
-final_message: "JupyterHub Server is ready! Access at https://<server-ip>"
+final_message: "SUCCESS: JupyterHub is completely installed at https://<server-ip>"

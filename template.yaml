@@ -1,124 +1,118 @@
-name: "jupyter-notebook-server"
-display_name: "Jupyter Notebook Server" # Display Name separat ist oft Standard
-description: "Multi-user Jupyter Notebook Server für Übungen und Data Science Kurse"
-version: "1.0.0"
-category: "education"
-author: "DHBW CloudStore Team"
-icon: jupyter.png # Ein Icon ist immer gut
+template:
+  name: "jupyter-notebook-server"
+  display_name: "Jupyter Notebook Server"
+  description: "Multi-user Jupyter Notebook Server für Übungen und Data Science Kurse"
+  version: "1.0.1" # Version leicht erhöht wegen der Fixes
+  category: "education"
+  author: "DHBW CloudStore Team"
+  icon: jupyter.png
 
-# WICHTIG: Der Pfad zum Terraform Code
-terraform:
-  working_dir: terraform/
-  required_version: ">= 1.6.0"
+  terraform:
+    working_dir: terraform/
+    required_version: ">= 1.6.0"
 
-tags:
-  - jupyter
-  - python
-  - data-science
-  - machine-learning
-  - education
+  tags:
+    - jupyter
+    - python
+    - data-science
+    - machine-learning
+    - education
 
-parameters:
-  - name: student_emails
-    type: array           # "array" ist konsistent mit deinem Beispiel (statt "list")
-    description: "Liste der Studierenden-E-Mails für JupyterHub-Accounts"
-    required: true
-    # Validierungssyntax hängt vom Store ab, aber min/max length sieht gut aus
+  parameters:
+    - name: student_emails
+      type: array
+      description: "Liste der Studierenden-E-Mails für JupyterHub-Accounts"
+      required: true
+      
+    - name: admin_email
+      type: string
+      description: "E-Mail des Dozenten/Administrators"
+      required: true
+      validation: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
     
-  - name: admin_email
-    type: string
-    description: "E-Mail des Dozenten/Administrators"
-    required: true
-    # Regex Validierung ist super
-    validation: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
-  
-  - name: cpu_cores
-    type: number
-    description: "Anzahl CPU Kerne"
-    default: 2            # Empfehlung: JupyterHub braucht etwas mehr als 1 Core
-    min: 2
-    max: 8
-    required: true
+    - name: cpu_cores
+      type: number
+      description: "Anzahl CPU Kerne"
+      default: 2
+      min: 2
+      max: 8
+      required: true
+      
+    - name: ram_mb
+      type: number
+      description: "RAM in MB"
+      default: 4096
+      min: 2048
+      max: 16384
+      step: 1024
+      required: true
     
-  - name: ram_mb
-    type: number
-    description: "RAM in MB"
-    default: 4096         # Auch hier: 2GB ist knapp für Data Science
-    min: 2048
-    max: 16384
-    step: 1024
-    required: true
-  
-  # KORREKTUR: Muss exakt wie in variables.tf heißen ("disk_gb")
-  - name: disk_gb
-    type: number
-    description: "Festplattenspeicher (GB)"
-    default: 20
-    min: 10
-    max: 100
-    required: true
-  
-  - name: enable_gpu
-    type: boolean
-    description: "GPU-Unterstützung für Deep Learning aktivieren"
-    default: false
-  
-  - name: python_packages
-    type: array           # Konsistent "array"
-    description: "Zusätzliche Python-Pakete"
-    default:
-      - pandas
-      - numpy
-      - matplotlib
-      - scikit-learn
-      - seaborn
-    required: false
-  
-  - name: notebook_directory
-    type: string
-    description: "Pfad für vorinstallierte Übungs-Notebooks"
-    default: "/home/jovyan/exercises"
-    required: false
-  
-  - name: enable_git_sync
-    type: boolean
-    description: "Automatische Synchronisation mit Git-Repository"
-    default: false
-  
-  - name: git_repo_url
-    type: string
-    description: "Git-Repository URL"
-    required: false
-    # Bedingte Anzeige ist ein Feature mancher Stores, gut wenn unterstützt!
-    condition: "enable_git_sync == true"
+    - name: disk_gb
+      type: number
+      description: "Festplattenspeicher (GB)"
+      default: 20
+      min: 10
+      max: 100
+      required: true
+    
+    - name: enable_gpu
+      type: boolean
+      description: "GPU-Unterstützung für Deep Learning aktivieren"
+      default: false
+    
+    - name: python_packages
+      type: array
+      description: "Zusätzliche Python-Pakete"
+      default:
+        - pandas
+        - numpy
+        - matplotlib
+        - scikit-learn
+        - seaborn
+      required: false
+    
+    - name: notebook_directory
+      type: string
+      description: "Name des Ordners für Übungs-Notebooks (wird im Home-Verzeichnis erstellt)"
+      default: "exercises" # WICHTIG: Nur der Name, kein absoluter Pfad!
+      required: false
+    
+    - name: enable_git_sync
+      type: boolean
+      description: "Automatische Synchronisation mit Git-Repository"
+      default: false
+    
+    - name: git_repo_url
+      type: string
+      description: "Git-Repository URL"
+      required: false
+      condition: "enable_git_sync == true"
 
-outputs:
-  - name: jupyterhub_url
-    description: "JupyterHub Login-URL"
-    display: true         # Zeigt es prominent an
-  
-  # KORREKTUR: Mapping auf das existierende Output-Objekt
-  - name: admin_credentials
-    description: "Admin Login Daten (User, Passwort, Token)"
-    sensitive: true
-    display: false
-  
-  - name: student_credentials
-    description: "Login-Credentials für Studierende"
-    sensitive: true
-    display: false
-  
-  - name: jupyter_version
-    description: "Installierte JupyterHub Version"
-  
-  - name: installed_packages
-    description: "Liste der installierten Python-Pakete"
+  outputs:
+    - name: jupyterhub_url
+      description: "JupyterHub Login-URL"
+      display: true
+    
+    - name: admin_credentials
+      description: "Admin Login Daten (User, Passwort, Token)"
+      sensitive: true
+      display: false
+    
+    - name: student_credentials
+      description: "Login-Credentials für Studierende"
+      sensitive: true
+      display: false
+    
+    - name: jupyter_version
+      description: "Installierte JupyterHub Version"
+    
+    - name: installed_packages
+      description: "Liste der installierten Python-Pakete"
 
-# Metadaten für die Kostenkalkulation im Store
-estimated_costs:
-  hourly: "0.15 - 0.50 EUR"
-  monthly: "100 - 350 EUR"
+  estimated_costs:
+    hourly: "0.15 - 0.50 EUR"
+    monthly: "100 - 350 EUR"
 
-requirements:
-  - "Min. 4GB RAM empfohlen"
-  - "Port 443 (HTTPS) Zugriff"
+  requirements:
+    - "Min. 4GB RAM empfohlen"
+    - "Port 443 (HTTPS) Zugriff"
