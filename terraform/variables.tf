@@ -95,7 +95,7 @@ variable "git_repo_url" {
 variable "external_network_name" {
   description = "Name des externen Netzwerks für Floating IPs"
   type        = string
-  default     = "public"
+  default     = "DHBW"
 }
 
 # ============================================================================
@@ -105,23 +105,23 @@ variable "external_network_name" {
 variable "image_name" {
   description = "Name of the Ubuntu image to use"
   type        = string
-  default     = "Ubuntu 22.04 LTS"
+  default     = "Ubuntu 22.04"
 }
 
 variable "network_name" {
   description = "Name of the OpenStack network"
   type        = string
-  default     = "default-network"
+  default     = "NAT"
 }
 
 variable "floating_ip_pool" {
   description = "Floating IP pool name"
   type        = string
-  default     = "public"
+  default     = "DHBW"
 }
 
 variable "flavor_name" {
   description = "Name des Flavors (Hardware-Größe) in OpenStack"
   type        = string
-  default     = "m1.medium" # Standard-Name, den wir gleich in tfvars anpassen
+  default     = "gp1.medium" 
 }
