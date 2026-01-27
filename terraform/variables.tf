@@ -18,6 +18,14 @@ variable "use_mock_provider" {
   default     = false
 }
 
+variable "app_name" {
+  type        = string
+  description = "Name of the Application"
+  validation {
+    condition     = can(regex("^[a-z0-9-]{3,20}$", var.app_name))
+    error_message = "app_name: Nur Kleinbuchstaben, Zahlen und Bindestrich erlaubt (3-20 Zeichen)."
+  }
+}
 # ============================================================================
 # USER INPUTS (VALIDATED CONTRACT)
 # ============================================================================

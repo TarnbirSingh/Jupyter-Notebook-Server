@@ -11,6 +11,10 @@ output "instance_id" {
   )
 }
 
+output "app_name" {
+  description = "MANDATORY: Application Name"
+  value       = var.app_name
+}
 # ============================================================================
 # PUBLIC OUTPUTS
 # ============================================================================
