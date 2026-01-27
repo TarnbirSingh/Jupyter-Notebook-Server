@@ -19,25 +19,14 @@ terraform {
       version = "~> 3.2"
     }
   }
-
-  # Backend auskommentiert für lokales Testing
-  # Für Production über CloudStore API wird das Backend dynamisch konfiguriert
-  # backend "pg" {
-  #   schema_name = "terraform_remote_state"
-  # }
 }
 
 # ============================================================================
-# Provider Configuration (Mock vs Production)
+# PROVIDER CONTRACT (MANDATORY)
+# Nutzt 'clouds.yaml' für Auth (auch im CloudStore Backend)
 # ============================================================================
-
 provider "openstack" {
-  auth_url    = var.use_mock_provider ? "http://mock-openstack:5000/v3" : null
-  user_name   = var.use_mock_provider ? "mock_user" : null
-  tenant_name = var.use_mock_provider ? "mock_tenant" : null
-  password    = var.use_mock_provider ? "mock_password" : null
-  region      = var.use_mock_provider ? "mock_region" : null
-  use_octavia = var.use_mock_provider ? false : true
+  cloud = "openstack"
 }
 
 # ============================================================================
@@ -52,7 +41,6 @@ data "openstack_images_image_v2" "ubuntu" {
 
 data "openstack_compute_flavor_v2" "selected" {
   count = var.use_mock_provider ? 0 : 1
-  # NEU: Wir suchen nach dem Namen statt nach vcpus/ram/disk
   name  = var.flavor_name
 }
 
@@ -63,17 +51,16 @@ data "openstack_networking_network_v2" "external" {
 }
 
 # ============================================================================
-# Random Password Generation for JupyterHub Users
+# Random Password Generation
 # ============================================================================
 
 resource "random_password" "student_passwords" {
   for_each = toset(var.student_emails)
-  
-  length  = 16
-  special = true
-  upper   = true
-  lower   = true
-  numeric = true
+  length   = 16
+  special  = true
+  upper    = true
+  lower    = true
+  numeric  = true
 }
 
 resource "random_password" "admin_password" {
@@ -108,7 +95,7 @@ resource "openstack_compute_keypair_v2" "jupyter_keypair" {
 }
 
 # ============================================================================
-# Security Group Configuration
+# Security Group
 # ============================================================================
 
 resource "openstack_networking_secgroup_v2" "jupyter_access" {
@@ -117,7 +104,6 @@ resource "openstack_networking_secgroup_v2" "jupyter_access" {
   description = "Security group for Jupyter Notebook Server"
 }
 
-# HTTPS (JupyterHub)
 resource "openstack_networking_secgroup_rule_v2" "https_ingress" {
   count             = var.use_mock_provider ? 0 : 1
   direction         = "ingress"
@@ -129,7 +115,6 @@ resource "openstack_networking_secgroup_rule_v2" "https_ingress" {
   security_group_id = openstack_networking_secgroup_v2.jupyter_access[0].id
 }
 
-# HTTP (redirect to HTTPS)
 resource "openstack_networking_secgroup_rule_v2" "http_ingress" {
   count             = var.use_mock_provider ? 0 : 1
   direction         = "ingress"
@@ -141,7 +126,6 @@ resource "openstack_networking_secgroup_rule_v2" "http_ingress" {
   security_group_id = openstack_networking_secgroup_v2.jupyter_access[0].id
 }
 
-# SSH (Admin Access)
 resource "openstack_networking_secgroup_rule_v2" "ssh_ingress" {
   count             = var.use_mock_provider ? 0 : 1
   direction         = "ingress"
@@ -173,20 +157,16 @@ resource "openstack_compute_instance_v2" "jupyter_server" {
   }
 
   user_data = templatefile("${path.module}/cloud-init.yaml", {
-    # FIX: Bereinigte Usernamen erstellen
     students = [
       for email in var.student_emails : {
         email    = email
-        # Ersetzt @ und . durch _
         username = replace(replace(lower(email), "@", "_"), ".", "_")
         password = random_password.student_passwords[email].result
       }
     ]
-    # FIX: Admin Username bereinigen
-    admin_email    = var.admin_email
-    admin_username = replace(replace(lower(var.admin_email), "@", "_"), ".", "_")
-    admin_password = random_password.admin_password.result
-    
+    admin_email         = var.admin_email
+    admin_username      = replace(replace(lower(var.admin_email), "@", "_"), ".", "_")
+    admin_password      = random_password.admin_password.result
     api_token           = random_string.jupyterhub_api_token.result
     python_packages     = var.python_packages
     notebook_directory  = var.notebook_directory
@@ -194,6 +174,7 @@ resource "openstack_compute_instance_v2" "jupyter_server" {
     git_repo_url        = var.git_repo_url
     enable_gpu          = var.enable_gpu
   })
+
   metadata = {
     deployment_id = var.deployment_id
     template      = "jupyter-notebook-server"
@@ -202,7 +183,7 @@ resource "openstack_compute_instance_v2" "jupyter_server" {
 }
 
 # ============================================================================
-# Floating IP (Public Access)
+# Floating IP
 # ============================================================================
 
 resource "openstack_networking_floatingip_v2" "jupyter_fip" {
@@ -217,20 +198,12 @@ resource "openstack_compute_floatingip_associate_v2" "jupyter_fip_assoc" {
 }
 
 # ============================================================================
-# Mock Resources (Testing without OpenStack)
+# Mock Resources
 # ============================================================================
 
 resource "null_resource" "mock_jupyter_server" {
   count = var.use_mock_provider ? 1 : 0
-
   triggers = {
-    deployment_id   = var.deployment_id
-    student_count   = length(var.student_emails)
-    admin_email     = var.admin_email
-    timestamp       = timestamp()
-  }
-
-  provisioner "local-exec" {
-    command = "echo 'Mock JupyterHub Server created for ${length(var.student_emails)} students'"
+    deployment_id = var.deployment_id
   }
 }
