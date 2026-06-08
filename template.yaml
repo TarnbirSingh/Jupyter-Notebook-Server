@@ -1,116 +1,135 @@
-template:
-  name: "jupyter-notebook-server"
-  display_name: "Jupyter Notebook Server"
-  description: "Multi-user Jupyter Notebook Server für Übungen und Data Science Kurse"
-  version: "1.0.2" # Bumped Version
-  category: "education"
-  author: "DHBW CloudStore Team"
-  icon: jupyter.png
 
-  terraform:
-    working_dir: terraform/
-    required_version: ">= 1.6.0"
+name: "jupyter-notebook-Felix"
+display_name: "Jupyter Notebook Server"
+description: "Multi-user Jupyter Notebook Server für Übungen und Data Science Kurse"
+version: "1.0.2" # Bumped Version
+category: "education"
+author: "DHBW CloudStore Team"
+icon: jupyter.png
 
-  tags:
-    - jupyter
-    - python
-    - data-science
+terraform:
+  working_dir: terraform/
+  required_version: ">= 1.6.0"
 
-  parameters:
-    - name: app_name
-      type: string
-      description: "Name der Anwendung (nur Kleinbuchstaben)"
-      required: true
-      validation:
-        pattern: "^[a-z0-9-]{3,20}$"
+ui:
+  groups:
+    - id: general
+      title: "Allgemein"
+      order: 1
+    - id: user
+      title: "Nutzer"
+      order: 2
+      description: "Einstellungen für Gruppenmitglieder"
+    - id: resources
+      title: "Ressourcen"
+      order: 3
 
-    - name: student_emails
-      type: array
-      description: "Liste der Studierenden-E-Mails"
-      required: true
-      validation:
-        min_items: 1
-        max_items: 50
 
-    - name: admin_email
-      type: string
-      description: "E-Mail des Dozenten"
-      required: true
-      validation:
-        pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+parameters:
+  - name: app_name
+    type: string
+    description: "Name der Anwendung (nur Kleinbuchstaben)"
+    required: true
+    x-group: general
+    x-order: 1
+    x-ui:
+      control: text
+      placeholder: "z.B. mein-projekt-01"
+    validation:
+      pattern: "^[a-zA-Z0-9-_]{3,20}$"
+
+  - name: student_emails
+    type: array
+    description: "Liste der Studierenden-E-Mails"
+    required: true
+    x-ui:
+      widget: user-picker
+      multi: true # Multi "false" stellt sicher dass nur ein Nutzer gewählt werden kann
+      extract: email # Wert des Nutzers der an die App übergeben werden soll
+      group: user
+      order: 2
+      placeholder: "Studenten auswählen..."
+
+  - name: admin_email
+    type: string # entspricht terraform-type string z.B. admin_email": "s232711@student.dhbw-mannheim.de",    
+    description: "Dozent mit Sudo-Rechten"
+    required: true
+    x-ui:
+      widget: user-picker
+      multi: false # Multi "false" stellt sicher dass nur ein Nutzer gewählt werden kann
+      extract: email # Wert des Nutzers der an die App übergeben werden soll
+      group: user
+      order: 1
+      placeholder: "Dozent auswählen..."
+  
+  - name: cpu_cores
+    type: number
+    description: "Anzahl CPU Kerne"
+    default: 2
+    required: true
+    validation:
+      min: 2
+      max: 8
     
-    - name: cpu_cores
-      type: number
-      description: "Anzahl CPU Kerne"
-      default: 2
-      required: true
-      validation:
-        min: 2
-        max: 8
-      
-    - name: ram_mb
-      type: number
-      description: "RAM in MB"
-      default: 4096
-      required: true
-      validation:
-        min: 2048
-        max: 16384
-    
-    - name: disk_gb
-      type: number
-      description: "Festplattenspeicher (GB)"
-      default: 20
-      required: true
-      validation:
-        min: 10
-        max: 100
-    
-    - name: enable_gpu
-      type: boolean
-      description: "GPU-Unterstützung"
-      default: false
-    
-    - name: notebook_directory
-      type: string
-      description: "Ordnername für Notebooks"
-      default: "exercises"
-      required: false
-      validation:
-        pattern: "^[a-zA-Z0-9-_]+$"
+  - name: ram_mb
+    type: number
+    description: "RAM in MB"
+    default: 4096
+    required: true
+    validation:
+      min: 2048
+      max: 16384
+  
+  - name: disk_gb
+    type: number
+    description: "Festplattenspeicher (GB)"
+    default: 20
+    required: true
+    validation:
+      min: 10
+      max: 100
+  
+  - name: enable_gpu
+    type: boolean
+    description: "GPU-Unterstützung"
+    default: false
+  
+  - name: notebook_directory
+    type: string
+    description: "Ordnername für Notebooks"
+    default: "exercises"
+    required: false
+    validation:
+      pattern: "^[a-zA-Z0-9-_]+$"
 
-  outputs:
-    # SYSTEM PFLICHTFELD
-    - name: instance_id
-      description: "System ID der Haupt-Instanz"
-      display: false
+outputs:
+  # SYSTEM PFLICHTFELD
+  - name: instance_id
+    description: "System ID der Haupt-Instanz"
+    display: false
 
-    - name: app_name
-      description: "Name der Anwendung"
-      display: true
+  - name: app_name
+    description: "Name der Anwendung"
+    display: true
 
-    # USER OUTPUTS
-    - name: jupyterhub_url
-      description: "Login URL"
-      display: true
-    
-    - name: admin_credentials
-      description: "Admin Login"
-      sensitive: true
-      display: false
-    
-    - name: student_credentials
-      description: "Studenten Login"
-      sensitive: true
-      display: false
-    
-    - name: jupyter_version
-      description: "Version"
-      display: true
+  # USER OUTPUTS
+  - name: jupyterhub_url
+    description: "Login URL"
+    display: true
+  
+  - name: admin_credentials
+    description: "Admin Login"
+    sensitive: true
+    display: false
+  
+  - name: student_credentials
+    description: "Studenten Login"
+    sensitive: true
+    display: false
+  
+  - name: jupyter_version
+    description: "Version"
+    display: true
 
-  estimated_costs:
-    hourly: "0.15 - 0.50 EUR"
-    monthly: "100 - 350 EUR"
-
-  requirements:
-    - "Min. 4GB RAM empfohlen"
+requirements:
+  - "Min. 4GB RAM empfohlen"
