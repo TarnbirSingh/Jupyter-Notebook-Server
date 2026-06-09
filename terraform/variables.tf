@@ -35,7 +35,7 @@ variable "student_usernames" {
   type        = list(string)
   
   validation {
-    condition     = length(var.student_emails) > 0
+    condition     = length(var.student_usernames) > 0
     error_message = "At least one student username is required."
   }
   
