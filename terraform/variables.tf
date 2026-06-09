@@ -30,32 +30,22 @@ variable "app_name" {
 # USER INPUTS (VALIDATED CONTRACT)
 # ============================================================================
 
-variable "student_emails" {
-  description = "List of student email addresses"
+variable "student_usernames" {
+  description = "List of student usernames addresses"
   type        = list(string)
   
   validation {
-    condition     = length(var.student_emails) > 0
-    error_message = "At least one student email is required."
+    condition     = length(var.student_usernames) > 0
+    error_message = "At least one student username is required."
   }
   
-  validation {
-    condition = alltrue([
-      for email in var.student_emails : can(regex("^\\S+@\\S+\\.\\S+$", email))
-    ])
-    error_message = "All items in student_emails must be valid email addresses."
-  }
 }
 
-variable "admin_email" {
-  description = "Email address of the admin"
+variable "admin_username" {
+  description = "Username of the admin"
   type        = string
 
-  validation {
-    # Regex aus template.yaml
-    condition     = can(regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.admin_email))
-    error_message = "The admin_email is invalid."
-  }
+ 
 }
 
 variable "cpu_cores" {

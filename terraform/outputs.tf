@@ -55,7 +55,7 @@ output "admin_credentials" {
   description = "Administrator login credentials"
   sensitive   = true
   value = {
-    username  = var.admin_email
+    username  = var.admin_username
     password  = random_password.admin_password.result
     api_token = random_string.jupyterhub_api_token.result
   }
@@ -65,10 +65,10 @@ output "student_credentials" {
   description = "Student login credentials"
   sensitive   = true
   value = {
-    for email in var.student_emails : email => {
-      username     = email
-      password     = random_password.student_passwords[email].result
-      notebook_url = "${var.use_mock_provider ? "https://mock" : "https://${try(openstack_networking_floatingip_v2.jupyter_fip[0].address, "ip")}"}/user/${email}/"
+    for username in var.student_usernames : username => {
+      username     = username
+      password     = random_password.student_passwords[username].result
+      notebook_url = "${var.use_mock_provider ? "https://mock" : "https://${try(openstack_networking_floatingip_v2.jupyter_fip[0].address, "ip")}"}/user/${username}/"
     }
   }
 }

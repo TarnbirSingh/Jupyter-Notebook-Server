@@ -2,7 +2,7 @@
 name: "jupyter-notebook-Felix"
 display_name: "Jupyter Notebook Server"
 description: "Multi-user Jupyter Notebook Server für Übungen und Data Science Kurse"
-version: "1.0.2" # Bumped Version
+version: "1.1.0" # Bumped Version
 category: "education"
 author: "DHBW CloudStore Team"
 icon: jupyter.png
@@ -38,26 +38,26 @@ parameters:
     validation:
       pattern: "^[a-zA-Z0-9-_]{3,20}$"
 
-  - name: student_emails
+  - name: student_usernames
     type: array
-    description: "Liste der Studierenden-E-Mails"
+    description: "Liste der Studierenden"
     required: true
     x-ui:
       widget: user-picker
       multi: true # Multi "false" stellt sicher dass nur ein Nutzer gewählt werden kann
-      extract: email # Wert des Nutzers der an die App übergeben werden soll
+      extract: name # Wert des Nutzers der an die App übergeben werden soll
       group: user
       order: 2
       placeholder: "Studenten auswählen..."
 
-  - name: admin_email
+  - name: admin_username
     type: string # entspricht terraform-type string z.B. admin_email": "s232711@student.dhbw-mannheim.de",    
     description: "Dozent mit Sudo-Rechten"
     required: true
     x-ui:
       widget: user-picker
       multi: false # Multi "false" stellt sicher dass nur ein Nutzer gewählt werden kann
-      extract: email # Wert des Nutzers der an die App übergeben werden soll
+      extract: name # Wert des Nutzers der an die App übergeben werden soll
       group: user
       order: 1
       placeholder: "Dozent auswählen..."
