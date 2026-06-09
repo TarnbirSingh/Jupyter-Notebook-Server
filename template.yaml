@@ -45,7 +45,7 @@ parameters:
     x-ui:
       widget: user-picker
       multi: true # Multi "false" stellt sicher dass nur ein Nutzer gewählt werden kann
-      extract: email # Wert des Nutzers der an die App übergeben werden soll
+      extract: name # Wert des Nutzers der an die App übergeben werden soll
       group: user
       order: 2
       placeholder: "Studenten auswählen..."
@@ -57,7 +57,7 @@ parameters:
     x-ui:
       widget: user-picker
       multi: false # Multi "false" stellt sicher dass nur ein Nutzer gewählt werden kann
-      extract: email # Wert des Nutzers der an die App übergeben werden soll
+      extract: name # Wert des Nutzers der an die App übergeben werden soll
       group: user
       order: 1
       placeholder: "Dozent auswählen..."

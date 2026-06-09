@@ -55,7 +55,7 @@ data "openstack_networking_network_v2" "external" {
 # ============================================================================
 
 resource "random_password" "student_passwords" {
-  for_each = toset(var.student_emails)
+  for_each = toset(var.student_usernames)
   length   = 16
   special  = true
   upper    = true
@@ -158,14 +158,12 @@ resource "openstack_compute_instance_v2" "jupyter_server" {
 
   user_data = templatefile("${path.module}/cloud-init.yaml", {
     students = [
-      for email in var.student_emails : {
-        email    = email
-        username = replace(replace(lower(email), "@", "_"), ".", "_")
-        password = random_password.student_passwords[email].result
+      for username in var.student_usernames : {        
+        username = username
+        password = random_password.student_passwords[username].result
       }
-    ]
-    admin_email         = var.admin_email
-    admin_username      = replace(replace(lower(var.admin_email), "@", "_"), ".", "_")
+    ]    
+    admin_username      = var.admin_username
     admin_password      = random_password.admin_password.result
     api_token           = random_string.jupyterhub_api_token.result
     python_packages     = var.python_packages
@@ -178,7 +176,7 @@ resource "openstack_compute_instance_v2" "jupyter_server" {
   metadata = {
     deployment_id = var.deployment_id
     template      = "jupyter-notebook-server"
-    admin_email   = var.admin_email
+    admin_username = var.admin_username
   }
 }
 
