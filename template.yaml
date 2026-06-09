@@ -40,7 +40,7 @@ parameters:
 
   - name: student_usernames
     type: array
-    description: "Liste der Studierenden-E-Mails"
+    description: "Liste der Studierenden"
     required: true
     x-ui:
       widget: user-picker
