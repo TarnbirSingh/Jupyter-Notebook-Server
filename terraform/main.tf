@@ -76,20 +76,22 @@ data "openstack_networking_network_v2" "external" {
 # ============================================================================
 
 resource "random_password" "student_passwords" {
-  for_each = toset(local.resolved_students)
-  length   = 16
-  special  = true
-  upper    = true
-  lower    = true
-  numeric  = true
+  for_each         = toset(local.resolved_students)
+  length           = 16
+  special          = true
+  override_special = "_-"
+  upper            = true
+  lower            = true
+  numeric          = true
 }
 
 resource "random_password" "admin_password" {
-  length  = 24
-  special = true
-  upper   = true
-  lower   = true
-  numeric = true
+  length           = 24
+  special          = true
+  override_special = "_-"
+  upper            = true
+  lower            = true
+  numeric          = true
 }
 
 resource "random_string" "jupyterhub_api_token" {
