@@ -1,8 +1,7 @@
-
-name: "jupyter-notebook-Felix"
+name: jupyter-notebook-server
 display_name: "Jupyter Notebook Server"
-description: "Multi-user Jupyter Notebook Server für Übungen und Data Science Kurse"
-version: "1.1.0" # Bumped Version
+description: "Multi-User JupyterHub-Server für Übungen und Data-Science-Kurse. Vorinstallierte Python-Pakete (pandas, numpy, matplotlib, scikit-learn, seaborn)."
+version: "2.0.0"
 category: "education"
 author: "DHBW CloudStore Team"
 icon: jupyter.png
@@ -11,125 +10,153 @@ terraform:
   working_dir: terraform/
   required_version: ">= 1.6.0"
 
-ui:
-  groups:
-    - id: general
-      title: "Allgemein"
-      order: 1
-    - id: user
-      title: "Nutzer"
-      order: 2
-      description: "Einstellungen für Gruppenmitglieder"
-    - id: resources
-      title: "Ressourcen"
-      order: 3
+tags:
+  - jupyter
+  - python
+  - data-science
+  - education
+  - multi-user
 
+email_credentials:
+  enabled: true
+
+deploy-strategy:
+  one-instance: true
+  one-per-group: true
+
+ui-groups:
+  - id: general
+    title: "Allgemein und Nutzer"
+    order: 1
+  - id: resources
+    title: "Ressourcen"
+    order: 2
+  - id: specific
+    title: "Jupyter-Optionen"
+    order: 3
 
 parameters:
-  - name: app_name
-    type: string
-    description: "Name der Anwendung (nur Kleinbuchstaben)"
-    required: true
-    x-group: general
-    x-order: 1
-    x-ui:
-      control: text
-      placeholder: "z.B. mein-projekt-01"
-    validation:
-      pattern: "^[a-zA-Z0-9-_]{3,20}$"
 
-  - name: student_usernames
-    type: array
-    description: "Liste der Studierenden"
-    required: true
-    x-ui:
-      widget: user-picker
-      multi: true # Multi "false" stellt sicher dass nur ein Nutzer gewählt werden kann
-      extract: name # Wert des Nutzers der an die App übergeben werden soll
-      group: user
-      order: 2
-      placeholder: "Studenten auswählen..."
+  general:
+    - name: app_name
+      type: string
+      required: true
+      validation:
+        pattern: "^[a-z0-9-]{3,20}$"
+      description: "Name der Anwendung"
+      x-ui:
+        group_id: general
+        in_group_order: 1
+        icon: Server
+        placeholder: "z.B. data-science-ws25"
+        hint: "Nur Kleinbuchstaben, Zahlen und Bindestriche (3-20 Zeichen)"
 
-  - name: admin_username
-    type: string # entspricht terraform-type string z.B. admin_email": "s232711@student.dhbw-mannheim.de",    
-    description: "Dozent mit Sudo-Rechten"
-    required: true
-    x-ui:
-      widget: user-picker
-      multi: false # Multi "false" stellt sicher dass nur ein Nutzer gewählt werden kann
-      extract: name # Wert des Nutzers der an die App übergeben werden soll
-      group: user
-      order: 1
-      placeholder: "Dozent auswählen..."
-  
-  - name: cpu_cores
-    type: number
-    description: "Anzahl CPU Kerne"
-    default: 2
-    required: true
-    validation:
-      min: 2
-      max: 8
-    
-  - name: ram_mb
-    type: number
-    description: "RAM in MB"
-    default: 4096
-    required: true
-    validation:
-      min: 2048
-      max: 16384
-  
-  - name: disk_gb
-    type: number
-    description: "Festplattenspeicher (GB)"
-    default: 20
-    required: true
-    validation:
-      min: 10
-      max: 100
-  
-  - name: enable_gpu
-    type: boolean
-    description: "GPU-Unterstützung"
-    default: false
-  
-  - name: notebook_directory
-    type: string
-    description: "Ordnername für Notebooks"
-    default: "exercises"
-    required: false
-    validation:
-      pattern: "^[a-zA-Z0-9-_]+$"
+    - name: admin_username
+      type: string
+      required: true
+      description: "Dozent (erhält Admin-Rechte in JupyterHub)"
+      x-ui:
+        group_id: general
+        in_group_order: 2
+        icon: Users
+        placeholder: "Dozent auswählen..."
+        widget:
+          type: user-picker
+          multi: false
+          extract: email
+
+    - name: students
+      type: array
+      required: false
+      description: "Studierende (Linux-Accounts und JupyterHub-User auf der VM, bei one-instance)"
+      x-ui:
+        group_id: general
+        in_group_order: 3
+        icon: Users
+        placeholder: "Studierende auswählen..."
+        hint: "Befüllen, wenn alle Studierenden sich einen geteilten JupyterHub teilen sollen. → Strategie 'one-instance' im nächsten Schritt."
+        widget:
+          type: user-picker
+          multi: true
+          extract: email
+
+    - name: student_groups
+      type: groups
+      required: false
+      description: "Projektgruppen der Studierenden (bei one-per-group: ein JupyterHub je Gruppe)"
+      x-ui:
+        group_id: general
+        in_group_order: 4
+        icon: Users
+        hint: "Befüllen, wenn pro Gruppe ein eigener JupyterHub entstehen soll. → Strategie 'one-per-group' im nächsten Schritt."
+        widget:
+          type: group-builder
+          extract: email
+
+  specific:
+    - name: flavor_name
+      type: selection
+      required: true
+      default: "gp1.medium"
+      options:
+        - label: "Small (1 CPU, 2 GB RAM)"
+          value: "gp1.small"
+        - label: "Medium (2 CPU, 4 GB RAM) — Empfohlen"
+          value: "gp1.medium"
+        - label: "Large (4 CPU, 8 GB RAM)"
+          value: "gp1.large"
+      description: "VM-Größe"
+      x-ui:
+        group_id: resources
+        in_group_order: 1
+        icon: Cpu
+        hint: "Medium reicht für Übungen mit 5-10 Studierenden. Bei größeren Datensätzen Large wählen."
+
+    - name: notebook_directory
+      type: string
+      required: false
+      default: "exercises"
+      validation:
+        pattern: "^[a-zA-Z0-9-_]+$"
+      description: "Ordnername für Notebooks (im Home-Verzeichnis jedes Nutzers)"
+      x-ui:
+        group_id: specific
+        in_group_order: 1
+        placeholder: "exercises"
+        hint: "Einfacher Verzeichnisname, keine Pfade."
 
 outputs:
-  # SYSTEM PFLICHTFELD
   - name: instance_id
-    description: "System ID der Haupt-Instanz"
+    description: "System ID der Instanz"
     display: false
 
   - name: app_name
-    description: "Name der Anwendung"
+    description: "Projektname"
     display: true
 
-  # USER OUTPUTS
   - name: jupyterhub_url
-    description: "Login URL"
-    display: true
-  
-  - name: admin_credentials
-    description: "Admin Login"
-    sensitive: true
-    display: false
-  
-  - name: student_credentials
-    description: "Studenten Login"
-    sensitive: true
-    display: false
-  
-  - name: jupyter_version
-    description: "Version"
+    description: "JupyterHub Login-URL"
     display: true
 
-requirements:
-  - "Min. 4GB RAM empfohlen"
+  - name: jupyter_version
+    description: "Installierte JupyterHub Version"
+    display: true
+
+  - name: ssh_command
+    description: "SSH Befehl für VM-Zugang"
+    display: true
+
+  - name: admin_credentials
+    description: "Admin-Zugangsdaten (Dozent)"
+    sensitive: true
+    display: false
+
+  - name: student_credentials
+    description: "Studierenden-Zugangsdaten"
+    sensitive: true
+    display: false
+
+  - name: ssh_private_key
+    description: "SSH Private Key"
+    sensitive: true
+    display: false

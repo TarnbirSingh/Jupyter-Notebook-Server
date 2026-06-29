@@ -1,5 +1,15 @@
 #cloud-config
 # JupyterHub Multi-User Server Setup (Fixed Version)
+
+ssh_pwauth: true
+
+# Debug-Fallback: ubuntu-User bekommt das Admin-Passwort, damit auch bei
+# fehlgeschlagener Admin-User-Erstellung noch ein Passwort-Login möglich ist.
+chpasswd:
+  expire: false
+  list: |
+    ubuntu:${admin_password}
+
 package_update: true
 package_upgrade: true
 
@@ -17,6 +27,7 @@ packages:
   - gnupg
   - vim
   - htop
+  - ufw
 
 write_files:
   # 1. JupyterHub Configuration (Mit allen Bugfixes)
