@@ -3,8 +3,8 @@
 # ============================================================================
 
 output "instance_id" {
-  description = "MANDATORY: VM ID for Backend Management"
-  value       = var.use_mock_provider ? "mock-id-123" : (
+  description = "VM ID for backend management"
+  value = var.use_mock_provider ? "mock-id-123" : (
     length(openstack_compute_instance_v2.jupyter_server) > 0 ?
     openstack_compute_instance_v2.jupyter_server[0].id :
     "unknown"
@@ -12,9 +12,10 @@ output "instance_id" {
 }
 
 output "app_name" {
-  description = "MANDATORY: Application Name"
+  description = "Application Name"
   value       = var.app_name
 }
+
 # ============================================================================
 # PUBLIC OUTPUTS
 # ============================================================================
@@ -28,18 +29,9 @@ output "jupyterhub_url" {
   )
 }
 
-output "server_info" {
-  description = "Server Configuration Info"
-  value = {
-    deployment_id = var.deployment_id
-    cpu_cores     = var.cpu_cores
-    ram_mb        = var.ram_mb
-  }
-}
-
-output "installed_packages" {
-  description = "List of installed Python packages"
-  value       = var.python_packages
+output "ssh_command" {
+  description = "SSH command for VM access"
+  value       = "ssh -i <private_key> ubuntu@${var.use_mock_provider ? "mock-ip" : try(openstack_networking_floatingip_v2.jupyter_fip[0].address, "ip")}"
 }
 
 output "jupyter_version" {
@@ -48,16 +40,18 @@ output "jupyter_version" {
 }
 
 # ============================================================================
-# SENSITIVE OUTPUTS (CREDENTIALS)
+# SENSITIVE OUTPUTS
 # ============================================================================
 
 output "admin_credentials" {
   description = "Administrator login credentials"
   sensitive   = true
   value = {
-    username  = var.admin_username
-    password  = random_password.admin_password.result
-    api_token = random_string.jupyterhub_api_token.result
+    username     = local.email_to_username[var.admin_username]
+    email        = var.admin_username
+    password     = random_password.admin_password.result
+    api_token    = random_string.jupyterhub_api_token.result
+    notebook_url = "${var.use_mock_provider ? "https://mock" : "https://${try(openstack_networking_floatingip_v2.jupyter_fip[0].address, "ip")}"}/user/${local.email_to_username[var.admin_username]}/"
   }
 }
 
@@ -65,10 +59,11 @@ output "student_credentials" {
   description = "Student login credentials"
   sensitive   = true
   value = {
-    for username in var.student_usernames : username => {
-      username     = username
-      password     = random_password.student_passwords[username].result
-      notebook_url = "${var.use_mock_provider ? "https://mock" : "https://${try(openstack_networking_floatingip_v2.jupyter_fip[0].address, "ip")}"}/user/${username}/"
+    for email in local.resolved_students : email => {
+      username     = local.email_to_username[email]
+      email        = email
+      password     = random_password.student_passwords[email].result
+      notebook_url = "${var.use_mock_provider ? "https://mock" : "https://${try(openstack_networking_floatingip_v2.jupyter_fip[0].address, "ip")}"}/user/${local.email_to_username[email]}/"
     }
   }
 }
@@ -78,4 +73,3 @@ output "ssh_private_key" {
   sensitive   = true
   value       = tls_private_key.jupyter_ssh_key.private_key_openssh
 }
-

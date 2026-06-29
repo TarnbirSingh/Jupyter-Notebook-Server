@@ -5,7 +5,7 @@
 variable "deployment_id" {
   description = "Unique deployment identifier"
   type        = string
-  
+
   validation {
     condition     = length(var.deployment_id) > 0
     error_message = "deployment_id must not be empty."
@@ -26,98 +26,81 @@ variable "app_name" {
     error_message = "app_name: Nur Kleinbuchstaben, Zahlen und Bindestrich erlaubt (3-20 Zeichen)."
   }
 }
-# ============================================================================
-# USER INPUTS (VALIDATED CONTRACT)
-# ============================================================================
 
-variable "student_usernames" {
-  description = "List of student usernames addresses"
-  type        = list(string)
-  
-  validation {
-    condition     = length(var.student_usernames) > 0
-    error_message = "At least one student username is required."
-  }
-  
-}
+# ============================================================================
+# USER INPUTS
+# ============================================================================
 
 variable "admin_username" {
-  description = "Username of the admin"
+  description = "E-Mail of the lecturer (admin)"
   type        = string
 
- 
-}
-
-variable "cpu_cores" {
-  description = "Number of CPU cores"
-  type        = number
-  default     = 2
-
   validation {
-    condition     = var.cpu_cores >= 2 && var.cpu_cores <= 8
-    error_message = "cpu_cores must be between 2 and 8."
+    condition     = can(regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.admin_username))
+    error_message = "admin_username must be a valid email address."
   }
 }
 
-variable "ram_mb" {
-  description = "RAM in megabytes"
-  type        = number
-  default     = 4096
-
-  validation {
-    condition     = var.ram_mb >= 2048 && var.ram_mb <= 16384
-    error_message = "ram_mb must be between 2048 and 16384 MB."
-  }
-}
-
-variable "disk_gb" {
-  description = "Disk size in gigabytes"
-  type        = number
-  default     = 20
-
-  validation {
-    condition     = var.disk_gb >= 10 && var.disk_gb <= 100
-    error_message = "disk_gb must be between 10 and 100 GB."
-  }
-}
-
-variable "enable_gpu" {
-  description = "Enable GPU support"
-  type        = bool
-  default     = false
-}
-
-# ============================================================================
-# APP CONFIGURATION
-# ============================================================================
-
-variable "python_packages" {
-  description = "Additional Python packages"
+# Befüllt bei deploy-strategy = one-instance
+variable "students" {
+  description = "List of student emails (one-instance mode)"
   type        = list(string)
-  default = ["pandas", "numpy", "matplotlib", "scikit-learn", "seaborn"]
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for email in var.students : can(regex("^\\S+@\\S+\\.\\S+$", email))
+    ])
+    error_message = "All items in students must be valid email addresses."
+  }
+}
+
+# Befüllt bei deploy-strategy = one-per-group (jeder Run bekommt eine isolierte Map mit genau einem Key)
+variable "student_groups" {
+  description = "Map of group name -> list of student emails (one-per-group mode)"
+  type        = map(list(string))
+  default     = {}
+
+  validation {
+    condition = alltrue([
+      for emails in values(var.student_groups) : alltrue([
+        for email in emails : can(regex("^\\S+@\\S+\\.\\S+$", email))
+      ])
+    ])
+    error_message = "All emails in student_groups must be valid."
+  }
+}
+
+variable "flavor_name" {
+  description = "Hardware quota"
+  type        = string
+  default     = "gp1.medium"
+
+  validation {
+    condition     = contains(["gp1.small", "gp1.medium", "gp1.large"], var.flavor_name)
+    error_message = "Invalid flavor. Allowed: gp1.small, gp1.medium, gp1.large."
+  }
 }
 
 variable "notebook_directory" {
   description = "Directory for notebooks"
   type        = string
   default     = "exercises"
-  
+
   validation {
     condition     = can(regex("^[a-zA-Z0-9-_]+$", var.notebook_directory))
     error_message = "notebook_directory must be a simple directory name (no paths)."
   }
 }
 
-variable "enable_git_sync" {
-  description = "Enable Git sync"
-  type        = bool
-  default     = false
-}
+# ============================================================================
+# APP CONFIGURATION (defaults, not user-facing)
+# ============================================================================
 
-variable "git_repo_url" {
-  description = "Git repository URL"
-  type        = string
-  default     = ""
+variable "python_packages" {
+  description = "Additional Python packages"
+  type        = list(string)
+  default     = ["pandas", "numpy", "matplotlib", "scikit-learn", "seaborn"]
 }
 
 # ============================================================================
@@ -142,9 +125,4 @@ variable "external_network_name" {
 variable "floating_ip_pool" {
   type    = string
   default = "DHBW"
-}
-
-variable "flavor_name" {
-  type    = string
-  default = "gp1.medium"
 }

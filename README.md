@@ -1,312 +1,120 @@
-# Jupyter Notebook Server Template
+# Jupyter Notebook Server
 
-Multi-User JupyterHub Server für Data Science und Machine Learning Übungen an der DHBW.
+Multi-User JupyterHub-Server für Data Science und Machine Learning Übungen an der DHBW. Eine VM mit vorinstalliertem JupyterHub + JupyterLab, alle Studierenden bekommen einen eigenen Account.
 
-## Überblick
+## Konzept
 
-Dieses Template erstellt einen vollständig konfigurierten JupyterHub-Server mit:
+Eine VM, ein gemeinsamer JupyterHub: Dozent (Admin) + N Studierende als Linux-Accounts mit eigenem Notebook-Verzeichnis. JupyterHub authentifiziert per PAM gegen die Linux-User. Ressourcenschonend gegenüber "ein Notebook pro Studi-VM".
 
-- ✅ **Multi-User Support**: Separate Accounts für jeden Studierenden
-- ✅ **JupyterLab Interface**: Moderne Notebook-Umgebung
-- ✅ **Pre-installed Packages**: pandas, numpy, matplotlib, scikit-learn, etc.
-- ✅ **HTTPS Support**: Nginx Reverse Proxy mit SSL (Self-Signed)
-- ✅ **PAM Authentication**: Email-basierte Benutzeranmeldung
-- ✅ **Automatische User-Erstellung**: Alle Studierenden werden beim Deployment angelegt
-- ✅ **Resource Management**: Fair-Share CPU/RAM Verteilung
-- ✅ **Secure Password Generation**: Zufällige, starke Passwörter für jeden User
+**Deploy-Strategien:**
 
-## Architektur
+- **`one-instance`** — ein JupyterHub für den ganzen Kurs, alle Studierenden als User darauf
+- **`one-per-group`** — ein eigener JupyterHub pro Projektgruppe, Mitglieder als User auf der jeweiligen VM
 
-```
-┌─────────────────────────────────────────────┐
-│          Internet (HTTPS/443)               │
-└──────────────────┬──────────────────────────┘
-                   │
-┌──────────────────▼──────────────────────────┐
-│          Nginx Reverse Proxy                │
-│       (SSL Self-Signed, Port 443/80)        │
-└──────────────────┬──────────────────────────┘
-                   │
-┌──────────────────▼──────────────────────────┐
-│         JupyterHub (Port 8000)              │
-│   ┌─────────────────────────────────────┐   │
-│   │  PAM Authenticator                  │   │
-│   │  (Username: email with _ separator) │   │
-│   └─────────────────────────────────────┘   │
-│                                             │
-│   ┌─────────────────────────────────────┐   │
-│   │  student1_test_de                   │   │
-│   │  → /home/student1_test_de/exercises │   │
-│   │  → JupyterLab on Port 127.0.0.1     │   │
-│   └─────────────────────────────────────┘   │
-│                                             │
-│   ┌─────────────────────────────────────┐   │
-│   │  dozent_test_de (Admin)             │   │
-│   │  → Full access to all notebooks     │   │
-│   │  → API Token für Automatisierung    │   │
-│   └─────────────────────────────────────┘   │
-└─────────────────────────────────────────────┘
-```
+`one-per-user` ist bewusst nicht aktiviert.
 
 ## Parameter
 
-### Pflichtparameter
+### Allgemein
 
-| Parameter | Typ | Beschreibung |
-|-----------|-----|--------------|
-| `student_emails` | `array` | Liste der Studierenden-E-Mails (min. 1) |
-| `admin_email` | `string` | Dozenten-Email für Admin-Zugang |
-| `cpu_cores` | `number` | CPU Kerne (2-8, Standard: 2) |
-| `ram_mb` | `number` | RAM in MB (2048-16384, Standard: 4096) |
-| `disk_gb` | `number` | Festplatte in GB (10-100, Standard: 20) |
+| Parameter | Typ | Pflicht | Beschreibung |
+|---|---|---|---|
+| `app_name` | string | ja | Identifier (3-20 Kleinbuchstaben/Zahlen/`-`) |
+| `admin_username` | email (user-picker) | ja | Dozent, erhält JupyterHub-Admin-Rechte und sudo auf der VM |
+| `students` | list(email) (user-picker, multi) | bei `one-instance` | Studierende des Kurses |
+| `student_groups` | groups (group-builder) | bei `one-per-group` | Projektgruppen |
 
-### Optional
+### Jupyter-Optionen
 
-| Parameter | Typ | Standard | Beschreibung |
-|-----------|-----|----------|--------------|
-| `enable_gpu` | `boolean` | `false` | GPU-Support für Deep Learning |
-| `python_packages` | `array` | `["pandas", "numpy", ...]` | Zusätzliche Python-Pakete |
-| `notebook_directory` | `string` | `"exercises"` | Name des Notebook-Ordners im Home-Dir |
-| `enable_git_sync` | `boolean` | `false` | Git-Repo Synchronisation |
-| `git_repo_url` | `string` | `""` | Git-Repository URL |
-
-### Infrastruktur (in `terraform.tfvars`)
-
-| Parameter | Typ | Standard | Beschreibung |
-|-----------|-----|----------|--------------|
-| `flavor_name` | `string` | `"m1.medium"` | OpenStack Flavor (Hardware-Größe) |
-| `image_name` | `string` | `"Ubuntu 22.04"` | OS Image Name |
-| `network_name` | `string` | `"NAT"` | Internes Netzwerk |
-| `external_network_name` | `string` | `"DHBW"` | Externes Netzwerk für Floating IP |
-| `floating_ip_pool` | `string` | `"DHBW"` | Pool für öffentliche IPs |
-
-## Deployment-Beispiel
-
-### Über CloudStore API
-
-```json
-{
-  "template_id": 3,
-  "user_id": 1,
-  "parameters": {
-    "student_emails": [
-      "student1@dhbw.de",
-      "student2@dhbw.de",
-      "student3@dhbw.de"
-    ],
-    "admin_email": "professor@dhbw.de",
-    "cpu_cores": 4,
-    "ram_mb": 8192,
-    "disk_gb": 50,
-    "python_packages": [
-      "pandas",
-      "numpy",
-      "matplotlib",
-      "scikit-learn",
-      "seaborn"
-    ],
-    "notebook_directory": "exercises",
-    "enable_git_sync": false
-  }
-}
-```
-
-### Manuelles Deployment
-
-```bash
-cd terraform
-terraform init
-
-# terraform.tfvars anpassen
-nano terraform.tfvars
-
-# Deployment starten
-terraform apply
-```
+| Parameter | Typ | Default | Beschreibung |
+|---|---|---|---|
+| `flavor_name` | selection | `gp1.medium` | VM-Größe |
+| `notebook_directory` | string | `exercises` | Ordnername im Home jedes Users für Notebooks |
 
 ## Outputs
 
-### Public Outputs
+| Output | Sichtbar | Sensitive | Beschreibung |
+|---|---|---|---|
+| `instance_id` | nein | nein | VM-ID (intern) |
+| `app_name` | ja | nein | Projektname |
+| `jupyterhub_url` | ja | nein | `https://<floating-ip>` |
+| `jupyter_version` | ja | nein | JupyterHub-Version |
+| `ssh_command` | ja | nein | SSH-Vorlage (Key benötigt) |
+| `admin_credentials` | nein | ja | Admin-Login + API-Token + persönliche notebook_url |
+| `student_credentials` | nein | ja | Map email → {username, email, password, notebook_url} |
+| `ssh_private_key` | nein | ja | SSH Private Key (RSA 4096) |
 
-| Output | Beschreibung | Beispiel |
-|--------|--------------|----------|
-| `jupyterhub_url` | Login-URL | `https://141.72.XXX.XXX` |
-| `server_info` | VM-Details | `{"deployment_id": "...", "student_count": 3}` |
-| `installed_packages` | Python-Pakete | `["pandas", "numpy", ...]` |
-| `jupyter_version` | JupyterHub Version | `"4.0.2"` |
-| `access_instructions` | Anleitung | Multi-line Text |
+## Setup-Ablauf (cloud-init)
 
-### Sensitive Outputs (via `/deployments/{id}/keys`)
+1. Ubuntu 22.04 + Pakete (`python3-pip`, `nginx`, `certbot`, `git`, `build-essential`)
+2. NodeJS 20 für JupyterHubs `configurable-http-proxy`
+3. JupyterHub + JupyterLab + Notebook via `pip3`
+4. Python-Pakete: `pandas`, `numpy`, `matplotlib`, `scikit-learn`, `seaborn` (fest in `python_packages` Default)
+5. User-Accounts (Admin + Studierende) mit eigenem Notebook-Ordner
+6. Self-Signed SSL-Zertifikat
+7. Nginx als Reverse-Proxy (Port 80 → 443 Redirect, 443 → JupyterHub auf 8000)
+8. JupyterHub als Systemd-Service
+9. UFW: Ports 22, 80, 443
 
-| Output | Beschreibung |
-|--------|--------------|
-| `admin_credentials` | `{"username": "dozent_test_de", "password": "...", "api_token": "..."}` |
-| `student_credentials` | Map: `email -> {"username": "student1_test_de", "password": "...", "notebook_url": "..."}` |
-| `ssh_private_key` | SSH Private Key (RSA 4096-bit) |
-| `floating_ip` | Öffentliche IP-Adresse |
-| `internal_ip` | Interne IP-Adresse |
+## Username-Konvention
 
-## Benutzernamen-Konvention
-
-**Wichtig**: Email-Adressen werden automatisch in gültige Unix-Usernamen umgewandelt:
-
-- `@` wird zu `_`
-- `.` wird zu `_`
-- Alles in Kleinbuchstaben
-
-**Beispiele**:
+E-Mails werden zu Linux/JupyterHub-Usernames konvertiert. Der lokale Teil bleibt, jedes Domain-Token wird auf max. 2 Zeichen gekürzt (hält den Username unter dem Linux-Limit von 32 Zeichen).
 
 | Email | Username |
-|-------|----------|
-| `student1@test.de` | `student1_test_de` |
-| `Max.Mustermann@dhbw.de` | `max_mustermann_dhbw_de` |
-| `professor@mail.dhbw-mannheim.de` | `professor_mail_dhbw-mannheim_de` |
+|---|---|
+| `s2327001@student.dhbw-mannheim.de` | `s2327001_st_dh-ma_de` |
+| `prof1@dhbw-mannheim.de` | `prof1_dh-ma_de` |
+
+JupyterHub nutzt diesen Username für PAM-Login.
 
 ## Zugriff
 
 ### Studierende
 
-1. URL öffnen: `https://<floating-ip>` (aus `jupyterhub_url`)
-2. **Username**: `student1_test_de` (siehe `student_credentials`)
-3. **Password**: Aus `student_credentials[email].password`
-4. JupyterLab öffnet sich automatisch in `/home/<username>/exercises`
+1. Browser öffnen: `jupyterhub_url` (`https://<floating-ip>`)
+2. **Self-Signed Cert akzeptieren** (Browser-Warnung wegklicken)
+3. Login mit Username + Passwort aus `student_credentials[<eigene-email>]`
+4. JupyterLab öffnet sich automatisch in `/home/<username>/<notebook_directory>`
+5. Persönliche Notebook-URL: `student_credentials[<email>].notebook_url`
 
-### Administrator
+### Dozent (Admin)
 
-1. Login mit Username aus `admin_credentials.username` (z.B. `dozent_test_de`)
-2. **Rechte**:
-   - Zugriff auf alle User-Notebooks
-   - Admin-Panel: `https://<ip>/hub/admin`
-   - API-Token für Automatisierung
-3. **SSH-Zugang**:
+1. **JupyterHub Admin-Panel:** Login wie ein Student, dann `/hub/admin` öffnen → User-Liste, Stoppen/Starten fremder Notebooks, Token-Verwaltung
+2. **API-Token:** `admin_credentials.api_token` für Automatisierung gegen die JupyterHub-REST-API
+3. **VM per SSH:**
    ```bash
-   ssh -i private_key.pem ubuntu@<floating-ip>
+   ssh -i ./key.pem ubuntu@<floating-ip>
+   sudo systemctl status jupyterhub        # Service-Status
+   sudo journalctl -u jupyterhub -f        # Live-Logs
+   sudo systemctl restart jupyterhub       # Neustart
    ```
 
-## Resource Allocation
-
-Ressourcen werden **fair zwischen allen Usern aufgeteilt**:
-
-```python
-# Beispiel: 8 CPU Cores, 16GB RAM, 10 Studierende
-cpu_per_user = 8 / 10 = 0.8 cores
-ram_per_user = 16384 / 10 = 1638 MB
-```
-
-**Wichtig**: Die Werte in `cpu_cores` und `ram_mb` gelten für die **gesamte VM**, nicht pro User!
-
-## Technische Details
-
-### Cloud-Init Prozess
-
-1. **System-Setup**: Ubuntu 22.04, Updates, Pakete
-2. **NodeJS Installation**: v20 für `configurable-http-proxy`
-3. **Python-Pakete**: JupyterHub, JupyterLab, Custom Packages
-4. **User-Erstellung**: Automatisch für alle Studierenden + Admin
-5. **Ordner-Struktur**: `/home/<username>/exercises` (automatisch)
-6. **SSL-Zertifikat**: Self-Signed (OpenSSL)
-7. **Nginx-Konfiguration**: Reverse Proxy mit HTTPS-Redirect
-8. **Systemd-Service**: JupyterHub als Auto-Start Service
-
-### JupyterHub-Konfiguration (Highlights)
-
-```python
-# PAM Authenticator
-c.JupyterHub.authenticator_class = 'jupyterhub.auth.PAMAuthenticator'
-
-# Admin User
-c.Authenticator.admin_users = {'dozent_test_de'}
-
-# Notebook Directory (relativ zum Home-Dir)
-c.Spawner.notebook_dir = '/home/{username}/exercises'
-
-# Umgebungsvariablen (PATH-Fix)
-c.Spawner.environment = {
-    "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-    "LANG": "C.UTF-8"
-}
-
-# Prevent "Running as root" Error
-c.Spawner.cmd = ["jupyterhub-singleuser", "--allow-root"]
-```
-
-## Mock-Modus Testing
+### Typische Admin-Aufgaben
 
 ```bash
-cd terraform
-terraform init
-terraform apply \
-  -var="use_mock_provider=true" \
-  -var='student_emails=["test1@example.com","test2@example.com"]' \
-  -var="admin_email=admin@example.com" \
-  -var="deployment_id=mock-test-123"
+# Notebook eines Studis stoppen (auf der VM)
+sudo systemctl restart jupyterhub
+
+# Passwort eines Studis zurücksetzen
+sudo passwd <username>
+
+# Zusätzliches Python-Paket nachinstallieren (global)
+sudo pip3 install <package>
+
+# Wer ist gerade eingeloggt
+who
 ```
 
-**Erstellt**:
-- ✅ Echte Passwörter für alle User
-- ✅ SSH-Keys
-- ✅ Outputs wie in Production
-- ❌ Keine echte VM
+## Ports
 
-## Vergleich mit `multi-student-vm`
+| Port | Zweck |
+|---|---|
+| 22 | SSH (nur Admin via Key) |
+| 80 | HTTP → 301 Redirect auf HTTPS |
+| 443 | HTTPS (JupyterHub via Nginx) |
 
-| Feature | `multi-student-vm` | `jupyter-notebook-server` |
-|---------|-------------------|--------------------------|
-| **VMs** | 1 VM pro Student | 1 gemeinsame VM |
-| **Isolation** | Vollständig (eigene VM) | Prozess-Level (JupyterHub) |
-| **Kosten** | N × VM-Kosten | 1 × VM-Kosten |
-| **Use Case** | Individuelle Projekte | Standardisierte Übungen |
-| **SSH-Zugang** | Ja (pro Student) | Nur Admin |
-| **Package Management** | Individuell | Zentral für alle |
+## Hinweise
 
-## Kostenabschätzung
-
-**Standard-Konfiguration** (4 Cores, 8GB RAM, 20 Studierende):
-- Hourly: ~0.20 EUR
-- Monthly: ~140 EUR
-
-**GPU-Konfiguration** (8 Cores, 32GB RAM, 1x NVIDIA T4):
-- Hourly: ~0.80 EUR
-- Monthly: ~550 EUR
-
-## Troubleshooting
-
-### JupyterHub startet nicht
-
-```bash
-ssh ubuntu@<floating-ip>
-sudo systemctl status jupyterhub
-sudo journalctl -u jupyterhub -f
-```
-
-### Student kann sich nicht einloggen
-
-```bash
-# Check if user exists
-sudo cat /etc/passwd | grep student@dhbw.de
-
-# Reset password manually
-sudo passwd student@dhbw.de
-```
-
-### Git-Sync funktioniert nicht
-
-```bash
-sudo bash /usr/local/bin/git-sync.sh
-sudo cat /var/log/syslog | grep git-sync
-```
-
-## Weiterentwicklung
-
-Potenzielle Features:
-
-- [ ] Let's Encrypt Integration (automatische SSL-Zertifikate)
-- [ ] LDAP/OAuth Integration (DHBW-SSO)
-- [ ] nbgrader Integration (automatische Übungskorrektur)
-- [ ] Resource Monitoring Dashboard
-- [ ] Backup/Restore Funktionalität
-- [ ] Container-basierte Spawner (Docker/K8s)
-
-## Lizenz
-
-MIT License - DHBW CloudStore Project
+- **Self-Signed Zertifikat:** Browser warnt beim ersten Aufruf. Für Produktiv-Setups Let's Encrypt via `certbot` einrichten (Paket ist bereits installiert).
+- **Ressourcen werden geteilt:** Bei 10 Studierenden auf einem `gp1.medium` (2 CPU, 4 GB) wird's bei rechenintensiven Notebooks eng. Für DataFrames > 1 GB lieber `gp1.large` wählen.
+- **Notebook-Speicher:** Notebooks liegen in `/home/<username>/<notebook_directory>`. Bei VM-Destroy gehen sie verloren — Studierende sollten regelmäßig `git push` machen oder Notebooks lokal sichern.

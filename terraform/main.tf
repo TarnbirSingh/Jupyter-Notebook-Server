@@ -1,6 +1,6 @@
 terraform {
   required_version = ">= 1.6.0"
-  
+
   required_providers {
     openstack = {
       source  = "terraform-provider-openstack/openstack"
@@ -21,16 +21,37 @@ terraform {
   }
 }
 
-# ============================================================================
-# PROVIDER CONTRACT (MANDATORY)
-# Nutzt 'clouds.yaml' für Auth (auch im CloudStore Backend)
-# ============================================================================
 provider "openstack" {
   cloud = "openstack"
 }
 
 # ============================================================================
-# Data Sources (OpenStack Resources)
+# LOCALS
+# ============================================================================
+locals {
+  # Bei one-per-group bekommt jeder Run eine Map mit genau einem Group-Key.
+  # Bei one-instance ist student_groups leer und students enthält die Liste.
+  resolved_students = length(var.student_groups) > 0 ? flatten(values(var.student_groups)) : var.students
+
+  # Email → Linux/JupyterHub-Username: Local-Part bleibt, jedes Domain-Token
+  # wird auf max. 2 Zeichen gekappt, hart auf 32 Zeichen begrenzt.
+  email_to_username = {
+    for email in concat([var.admin_username], local.resolved_students) :
+    email => substr(
+      lower(join("_", concat(
+        [split("@", email)[0]],
+        [
+          for token in split(".", split("@", email)[1]) :
+          join("-", [for part in split("-", token) : substr(part, 0, 2)])
+        ]
+      ))),
+      0, 32
+    )
+  }
+}
+
+# ============================================================================
+# DATA SOURCES
 # ============================================================================
 
 data "openstack_images_image_v2" "ubuntu" {
@@ -51,11 +72,11 @@ data "openstack_networking_network_v2" "external" {
 }
 
 # ============================================================================
-# Random Password Generation
+# CREDENTIALS
 # ============================================================================
 
 resource "random_password" "student_passwords" {
-  for_each = toset(var.student_usernames)
+  for_each = toset(local.resolved_students)
   length   = 16
   special  = true
   upper    = true
@@ -79,10 +100,6 @@ resource "random_string" "jupyterhub_api_token" {
   numeric = true
 }
 
-# ============================================================================
-# SSH Key Generation
-# ============================================================================
-
 resource "tls_private_key" "jupyter_ssh_key" {
   algorithm = "RSA"
   rsa_bits  = 4096
@@ -95,7 +112,7 @@ resource "openstack_compute_keypair_v2" "jupyter_keypair" {
 }
 
 # ============================================================================
-# Security Group
+# SECURITY GROUP
 # ============================================================================
 
 resource "openstack_networking_secgroup_v2" "jupyter_access" {
@@ -138,15 +155,15 @@ resource "openstack_networking_secgroup_rule_v2" "ssh_ingress" {
 }
 
 # ============================================================================
-# Compute Instance (JupyterHub Server)
+# INSTANCE
 # ============================================================================
 
 resource "openstack_compute_instance_v2" "jupyter_server" {
-  count       = var.use_mock_provider ? 0 : 1
-  name        = "jupyter-server-${var.deployment_id}"
-  image_id    = data.openstack_images_image_v2.ubuntu[0].id
-  flavor_id   = data.openstack_compute_flavor_v2.selected[0].id
-  key_pair    = openstack_compute_keypair_v2.jupyter_keypair[0].name
+  count     = var.use_mock_provider ? 0 : 1
+  name      = "jupyter-server-${var.deployment_id}"
+  image_id  = data.openstack_images_image_v2.ubuntu[0].id
+  flavor_id = data.openstack_compute_flavor_v2.selected[0].id
+  key_pair  = openstack_compute_keypair_v2.jupyter_keypair[0].name
 
   security_groups = [
     openstack_networking_secgroup_v2.jupyter_access[0].name
@@ -158,30 +175,27 @@ resource "openstack_compute_instance_v2" "jupyter_server" {
 
   user_data = templatefile("${path.module}/cloud-init.yaml", {
     students = [
-      for username in var.student_usernames : {        
-        username = username
-        password = random_password.student_passwords[username].result
+      for email in local.resolved_students : {
+        username = local.email_to_username[email]
+        password = random_password.student_passwords[email].result
       }
-    ]    
-    admin_username      = var.admin_username
-    admin_password      = random_password.admin_password.result
-    api_token           = random_string.jupyterhub_api_token.result
-    python_packages     = var.python_packages
-    notebook_directory  = var.notebook_directory
-    enable_git_sync     = var.enable_git_sync
-    git_repo_url        = var.git_repo_url
-    enable_gpu          = var.enable_gpu
+    ]
+    admin_username     = local.email_to_username[var.admin_username]
+    admin_password     = random_password.admin_password.result
+    api_token          = random_string.jupyterhub_api_token.result
+    python_packages    = var.python_packages
+    notebook_directory = var.notebook_directory
   })
 
   metadata = {
-    deployment_id = var.deployment_id
-    template      = "jupyter-notebook-server"
-    admin_username = var.admin_username
+    deployment_id  = var.deployment_id
+    template       = "jupyter-notebook-server"
+    admin_username = local.email_to_username[var.admin_username]
   }
 }
 
 # ============================================================================
-# Floating IP
+# FLOATING IP
 # ============================================================================
 
 resource "openstack_networking_floatingip_v2" "jupyter_fip" {
@@ -196,7 +210,7 @@ resource "openstack_compute_floatingip_associate_v2" "jupyter_fip_assoc" {
 }
 
 # ============================================================================
-# Mock Resources
+# MOCK RESOURCE
 # ============================================================================
 
 resource "null_resource" "mock_jupyter_server" {
